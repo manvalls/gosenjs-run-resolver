@@ -13,22 +13,37 @@ const dedupedFetch = (url: string) => {
   return promise
 }
 
-export const resolve = async (commands: Command[], cache: Record<string, Command[]> = {}): Promise<Command[]> => {
+class VersionMismatchError extends Error {
+  serverVersion: string
+
+  constructor(public readonly version: string) {
+    super(`Version mismatch: ${version}`)
+    this.serverVersion = version
+  }
+}
+
+export const resolve = async (commands: Command[], version: string, cache: Record<string, Command[]> = {}): Promise<Command[]> => {
 
   await Promise.all(commands.map(async (command) => {
     if (!('run' in command) || cache[command.run]) {
       return
     }
 
-    const res = await dedupedFetch(command.run)
-    const commands = await res.json()
+    const query = 'format=json' + (version ? `&version=${version}` : '')
+    const url = `${command.run}${command.run.includes('?') ? '&' : '?'}${query}`
+    const res = await dedupedFetch(url)
+    const result = await res.json()
 
-    if (!Array.isArray(commands)) {
+    if (result.version && version && result.version !== version) {
+      throw new VersionMismatchError(result.version)
+    }
+
+    if (!Array.isArray(result.commands)) {
       cache[command.run] = []
       return
     }
 
-    cache[command.run] = await resolve(commands, cache)
+    cache[command.run] = await resolve(result.commands, version, cache)
   }))
 
   let nextRoutineId = commands.reduce((acc, command) => {
