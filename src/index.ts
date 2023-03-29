@@ -13,7 +13,7 @@ const dedupedFetch = (url: string) => {
   return promise
 }
 
-class VersionMismatchError extends Error {
+export class VersionMismatchError extends Error {
   serverVersion: string
 
   constructor(public readonly version: string) {
@@ -34,16 +34,16 @@ export const resolve = async (commands: Command[], version: string, cache: Recor
     const res = await dedupedFetch(url)
     const result = await res.json()
 
-    if (result.version && version && result.version !== version) {
-      throw new VersionMismatchError(result.version)
+    if (result.error === 'VERSION_MISMATCH') {
+      throw new VersionMismatchError(result.serverVersion)
     }
 
-    if (!Array.isArray(result.commands)) {
+    if (!Array.isArray(result)) {
       cache[command.run] = []
       return
     }
 
-    cache[command.run] = await resolve(result.commands, version, cache)
+    cache[command.run] = await resolve(result, version, cache)
   }))
 
   let nextRoutineId = commands.reduce((acc, command) => {
